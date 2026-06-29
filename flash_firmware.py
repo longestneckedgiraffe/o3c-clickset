@@ -47,7 +47,7 @@ def flash(image_path, root=DEFAULT_ROOT, firmware_name=FIRMWARE_NAME, on_line=pr
 
     upgrade = os.path.join(root, "tools", "upgrade.exe")
     if gui:
-        on_line("Launching upgrade.exe in a new console. Follow its prompts; do not unplug.")
+        on_line("Launching upgrade.exe in a new console. Follow its prompts; do not unplug!")
         proc = subprocess.Popen([upgrade, "-r"], cwd=root, creationflags=subprocess.CREATE_NEW_CONSOLE)
         proc.wait()
         code = proc.returncode
@@ -67,9 +67,9 @@ def main():
     args = ap.parse_args()
 
     if not args.yes:
-        print("Put the device in bootloader mode first: hold the encoder knob 2-3 seconds, or in the")
-        print("SayoDevice configurator go Device -> Factory recovery -> Jump to bootloader.")
-        print("Do not unplug the device during flashing.")
+        print("Please confirm that your device is in bootloader mode")
+        print("Hold your Sayodevice's knob for 2-3 seconds -> Device -> Factory Recovery -> Jump to bootloader")
+        print("Do not unplug the device during flashing!")
         if input("Device in bootloader mode and ready to flash? [y/N] ").strip().lower() != "y":
             sys.exit("Aborted. Nothing flashed.")
 
