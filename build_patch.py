@@ -1,5 +1,4 @@
 import struct
-from capstone import Cs, CS_ARCH_RISCV, CS_MODE_RISCV32
 
 HOOK = 0x8508
 STUB = 0x2BB94
@@ -86,6 +85,7 @@ def patches():
 
 
 def verify():
+    from capstone import Cs, CS_ARCH_RISCV, CS_MODE_RISCV32
     md = Cs(CS_ARCH_RISCV, CS_MODE_RISCV32)
     for addr, data in patches():
         print(f"\n== @0x{addr:X} ({len(data)}B) {data.hex()} ==")

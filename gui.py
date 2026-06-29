@@ -23,10 +23,6 @@ count_entry = {}
 read_btn = write_btn = None
 
 
-def set_status(message):
-    status.set(message)
-
-
 def log(text, tag=None):
     output["state"] = "normal"
     output.insert("end", text + "\n", (tag,) if tag else ())
@@ -36,7 +32,7 @@ def log(text, tag=None):
 
 def run_async(button, busy_message, work, on_done):
     button["state"] = "disabled"
-    set_status(busy_message)
+    status.set(busy_message)
     progress.config(mode="indeterminate")
     progress.start(18)
 
@@ -45,7 +41,7 @@ def run_async(button, busy_message, work, on_done):
         progress.stop()
         progress.config(mode="determinate", value=0)
         if err is not None:
-            set_status(err)
+            status.set(err)
             messagebox.showerror("Error", err)
         else:
             on_done(result)
@@ -120,7 +116,7 @@ def build_download(parent):
             set_entry(state["patch_stock"], STOCK_NAME)
         log(f"Saved {n:,} bytes to {STOCK_NAME}", "ok")
         log("Verified: yes" if ok else "Verified: NO", "ok" if ok else "warn")
-        set_status(f"Downloaded {STOCK_NAME}" if ok else f"Downloaded {STOCK_NAME} (failed verify)")
+        status.set(f"Downloaded {STOCK_NAME}" if ok else f"Downloaded {STOCK_NAME} (failed verify)")
 
     btn.configure(command=lambda: run_async(
         btn, "Downloading firmware...", lambda: download_firmware.download(STOCK_NAME), done))
@@ -154,7 +150,7 @@ def build_patch(parent):
         log(f"Patched image: {o}", "ok")
         log(f"Stock backup:  {b}")
         log(f"Verified: {'yes' if ok else 'NO'}   ({n:,} bytes)", "ok" if ok else "warn")
-        set_status(f"Built {o}" if ok else f"Built {o} (failed verify)")
+        status.set(f"Built {o}" if ok else f"Built {o} (failed verify)")
 
     btn.configure(command=lambda: run_async(btn, "Building patched image...", work, done))
 
@@ -180,17 +176,17 @@ def build_flash(parent):
             raise SystemExit("Choose a firmware image to flash.")
 
         def line(s):
-            btn.after(0, lambda: (log(s), set_status(s)))
+            btn.after(0, lambda: (log(s), status.set(s)))
 
         return flash_firmware.flash(img.get().strip(), on_line=line, gui=True)
 
     def done(code):
         if code == 0 or code == CTRL_CLOSE_EXIT:
             log("Flash complete.", "ok")
-            set_status("Flash complete")
+            status.set("Flash complete")
         else:
             log(f"Flash finished with code {code} (see output).", "warn")
-            set_status(f"Flash failed (code {code})")
+            status.set(f"Flash failed (code {code})")
         root.after(1000, refresh_device)
 
     def go():
@@ -198,7 +194,7 @@ def build_flash(parent):
                 "clickset",
                 "Please confirm that your device is in bootloader mode\nHold your Sayodevice's knob for 2-3 seconds -> Device -> Factory Recovery -> Jump to bootloader\n\n"
                 "Do not unplug during flashing!\nContinue?"):
-            set_status("Flash cancelled")
+            status.set("Flash cancelled")
             return
         run_async(btn, "Flashing firmware...", work, done)
 
@@ -206,7 +202,6 @@ def build_flash(parent):
 
 
 def show_current(vals):
-    state["last_read"] = vals
     for i, k in enumerate(set_counts.KEYS):
         count_current[k].config(text=f"{vals[i]:,}")
     log("Current: " + fmt_counts(vals), "ok")
@@ -238,7 +233,7 @@ def build_counts(parent):
 
     def did_read(vals):
         show_current(vals)
-        set_status("Counts read")
+        status.set("Counts read")
 
     read_btn.configure(command=lambda: run_async(
         read_btn, "Reading counts...", lambda: with_device(set_counts.read_counts), did_read))
@@ -260,7 +255,7 @@ def do_write():
                 "Safety check",
                 "The current values shown must match the all-time counts on your device "
                 "screen.\n\nIf they do not match, choose No to abort.\n\nDo they match?"):
-            set_status("Write aborted")
+            status.set("Write aborted")
             return
         new = list(current)
         for i, k in enumerate(set_counts.KEYS):
@@ -272,10 +267,10 @@ def do_write():
             show_current(after)
             if after[:3] == new[:3]:
                 log("Counts written.", "ok")
-                set_status("Counts written")
+                status.set("Counts written")
             else:
                 log("Readback mismatch", "warn")
-                set_status("Readback mismatch")
+                status.set("Readback mismatch")
                 messagebox.showwarning(
                     "Readback mismatch",
                     "The values read back do not match what was written.\n"
@@ -304,7 +299,7 @@ def probe_device():
 
 
 def refresh_device():
-    set_status("Checking device...")
+    status.set("Checking device...")
 
     def worker():
         res = probe_device()
@@ -316,12 +311,12 @@ def refresh_device():
 def apply_device(res):
     code, vals = res
     if code == "clickset":
-        set_status("Device connected (clickset firmware)")
+        status.set("Device connected (clickset firmware)")
         show_current(vals)
     elif code == "stock":
-        set_status("Device connected (stock firmware)")
+        status.set("Device connected (stock firmware)")
     else:
-        set_status("No device found")
+        status.set("No device found")
 
 
 def build_ui(window):

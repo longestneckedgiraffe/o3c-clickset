@@ -1,3 +1,2 @@
 pycryptodome
 hidapi
-capstone

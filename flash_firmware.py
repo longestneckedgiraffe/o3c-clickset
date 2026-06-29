@@ -46,14 +46,10 @@ def flash(image_path, root=DEFAULT_ROOT, firmware_name=FIRMWARE_NAME, on_line=pr
     on_line(f"Staged {os.path.basename(image_path)} -> {target}")
 
     upgrade = os.path.join(root, "tools", "upgrade.exe")
-    if gui:
-        on_line("Launching upgrade.exe in a new console. Follow its prompts; do not unplug!")
-        proc = subprocess.Popen([upgrade, "-r"], cwd=root, creationflags=subprocess.CREATE_NEW_CONSOLE)
-        proc.wait()
-        code = proc.returncode
-    else:
-        on_line("Running upgrade.exe -r (do not unplug)")
-        code = subprocess.run([upgrade, "-r"], cwd=root).returncode
+    flags = subprocess.CREATE_NEW_CONSOLE if gui else 0
+    on_line("Launching upgrade.exe in a new console. Follow its prompts; do not unplug!"
+            if gui else "Running upgrade.exe -r (do not unplug)")
+    code = subprocess.run([upgrade, "-r"], cwd=root, creationflags=flags).returncode
     on_line(f"upgrade.exe exited with code {code}")
     return code
 
