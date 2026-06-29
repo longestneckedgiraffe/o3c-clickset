@@ -12,6 +12,7 @@ STOCK_NAME = "app_O3C.bin"
 MUTED = "#666"
 ERROR = "#b00020"
 OK = "#137333"
+CTRL_CLOSE_EXIT = 0xC000013A
 
 root = None
 status = progress = output = None
@@ -184,13 +185,13 @@ def build_flash(parent):
         return flash_firmware.flash(img.get().strip(), on_line=line, gui=True)
 
     def done(code):
-        if code == 0:
+        if code == 0 or code == CTRL_CLOSE_EXIT:
             log("Flash complete.", "ok")
             set_status("Flash complete")
-            refresh_device()
         else:
             log(f"Flash finished with code {code} (see output).", "warn")
             set_status(f"Flash failed (code {code})")
+        root.after(1000, refresh_device)
 
     def go():
         if not messagebox.askyesno(
