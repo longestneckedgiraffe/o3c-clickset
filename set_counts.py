@@ -48,7 +48,7 @@ def transact(dev, payload, timeout_ms=1000):
 
 
 def packet(mode, vals):
-    return struct.pack("<B", mode) + struct.pack("<I", MAGIC) + struct.pack("<4I", *vals)
+    return struct.pack("<BI4I", mode, MAGIC, *vals)
 
 
 def read_counts(dev):

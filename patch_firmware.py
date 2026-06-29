@@ -38,26 +38,31 @@ def selfcheck(patched_enc, stock_dec):
     assert bytes(untouched) == bytes(su), "Patch changed bytes outside the intended regions"
 
 
+def build_patched(stock_path, out=None, backup=None):
+    stock_dec = load_decrypted(stock_path)
+    patched_dec = o3c_fw.fix_md5(apply_patches(stock_dec))
+    patched_enc = o3c_fw.encrypt(patched_dec)
+    selfcheck(patched_enc, stock_dec)
+
+    out = out or os.path.splitext(stock_path)[0] + "_clickset.bin"
+    backup = backup or os.path.splitext(stock_path)[0] + "_stock_backup.bin"
+    open(out, "wb").write(patched_enc)
+    if not os.path.exists(backup):
+        open(backup, "wb").write(o3c_fw.encrypt(stock_dec))
+    return out, backup, len(patched_enc), o3c_fw.verify(patched_dec)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Add the click-counter command to an O3C firmware image")
     ap.add_argument("stock", help="stock firmware")
     ap.add_argument("-o", "--out", help="output patched encrypted image", default=None)
     args = ap.parse_args()
 
-    stock_dec = load_decrypted(args.stock)
-    patched_dec = o3c_fw.fix_md5(apply_patches(stock_dec))
-    patched_enc = o3c_fw.encrypt(patched_dec)
-    selfcheck(patched_enc, stock_dec)
+    out, backup, nbytes, md5_ok = build_patched(args.stock, args.out)
 
-    out = args.out or os.path.splitext(args.stock)[0] + "_clickset.bin"
-    backup = os.path.splitext(args.stock)[0] + "_stock_backup.bin"
-    open(out, "wb").write(patched_enc)
-    if not os.path.exists(backup):
-        open(backup, "wb").write(o3c_fw.encrypt(stock_dec))
-
-    print("Patched image :", out, len(patched_enc), "bytes")
+    print("Patched image :", out, nbytes, "bytes")
     print("Stock backup  :", backup)
-    print("MD5 Verifies  :", o3c_fw.verify(patched_dec))
+    print("MD5 Verifies  :", md5_ok)
     print("Magic         : 0x%08X" % build_patch.MAGIC)
     print("stub @ VA 0x%X (file 0x%X), hook @ VA 0x8508" % (build_patch.STUB, build_patch.STUB - o3c_fw.LOAD_ADDR))
 
