@@ -2,30 +2,43 @@ import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-import build_patch
 import download_firmware
-import o3c_fw
+import flash_firmware
 import patch_firmware
 import set_counts
 
+PAD = 8
+BACKUP_FILE = "counts_backup.txt"
+MUTED = "#666"
+ERROR = "#b00020"
 
-def with_device(fn):
-    dev = set_counts.open_device()
-    try:
-        return fn(dev)
-    finally:
-        dev.close()
-
-
-def fmt_counts(label, vals):
-    return f"{label}: left={vals[0]} middle={vals[1]} right={vals[2]} (slot4={vals[3]})"
+status = None
+progress = None
+output = None
 
 
-def run_async(button, work, on_done):
+def set_status(message):
+    status.set(message)
+
+
+def log(text, warn=False):
+    output["state"] = "normal"
+    output.insert("end", text + "\n", ("warn",) if warn else ())
+    output.see("end")
+    output["state"] = "disabled"
+
+
+def run_async(button, busy_message, work, on_done):
     button["state"] = "disabled"
+    set_status(busy_message)
+    progress.config(mode="indeterminate")
+    progress.start(18)
 
     def finish(result, err):
         button["state"] = "normal"
+        progress.stop()
+        progress.config(mode="determinate", value=0)
+        set_status("Ready")
         if err is not None:
             messagebox.showerror("Error", err)
         else:
@@ -43,11 +56,16 @@ def run_async(button, work, on_done):
     threading.Thread(target=worker, daemon=True).start()
 
 
-def section(parent, title):
-    f = ttk.LabelFrame(parent, text=title, padding=8)
-    f.pack(fill="x", padx=10, pady=6)
-    f.columnconfigure(1, weight=1)
-    return f
+def with_device(fn):
+    dev = set_counts.open_device()
+    try:
+        return fn(dev)
+    finally:
+        dev.close()
+
+
+def fmt_counts(vals):
+    return f"left {vals[0]}     middle {vals[1]}     right {vals[2]}     (slot4 {vals[3]})"
 
 
 def pick_into(entry):
@@ -58,95 +76,125 @@ def pick_into(entry):
 
 
 def build_download(parent):
-    f = section(parent, "1. Download firmware")
-    ttk.Label(f, text="Output file:").grid(row=0, column=0, sticky="w")
+    f = ttk.LabelFrame(parent, text="Download firmware", padding=PAD)
+    f.pack(fill="x", padx=PAD, pady=(PAD, 4))
+    f.columnconfigure(0, weight=1)
+
     out = ttk.Entry(f)
     out.insert(0, "app_O3C.bin")
-    out.grid(row=0, column=1, sticky="we", padx=6)
-    result = tk.StringVar()
-    btn = ttk.Button(f, text="Download")
-    btn.grid(row=0, column=2, padx=4)
+    out.grid(row=0, column=0, sticky="we", padx=(0, 6))
+    btn = ttk.Button(f, text="Download", width=18)
+    btn.grid(row=0, column=1)
 
     def done(res):
         n, ok = res
-        msg = f"Downloaded {n} bytes -> {out.get()}\nVerification: {ok}"
-        if not ok:
-            msg += "\nWARNING: Image failed verification"
-        result.set(msg)
+        log(f"Saved {n:,} bytes.     Verified: {'yes' if ok else 'no'}", warn=not ok)
 
-    btn.configure(command=lambda: run_async(btn, lambda: download_firmware.download(out.get()), done))
-    ttk.Label(f, textvariable=result, justify="left").grid(row=1, column=0, columnspan=3, sticky="w", pady=(6, 0))
+    btn.configure(command=lambda: run_async(
+        btn, "Downloading firmware...",
+        lambda: download_firmware.download(out.get()), done))
 
 
-def build_patch_section(parent):
-    f = section(parent, "2. Patch firmware")
-    ttk.Label(f, text="Stock image:").grid(row=0, column=0, sticky="w")
+def build_patch(parent):
+    f = ttk.LabelFrame(parent, text="Patch firmware", padding=PAD)
+    f.pack(fill="x", padx=PAD, pady=4)
+    f.columnconfigure(1, weight=1)
+
+    ttk.Label(f, text="Stock image").grid(row=0, column=0, sticky="w", padx=(0, 8))
     stock = ttk.Entry(f)
-    stock.grid(row=0, column=1, sticky="we", padx=6)
-    ttk.Button(f, text="Browse...", command=lambda: pick_into(stock)).grid(row=0, column=2, padx=4)
+    stock.grid(row=0, column=1, sticky="we", padx=(0, 6))
+    ttk.Button(f, text="Browse", width=10, command=lambda: pick_into(stock)).grid(row=0, column=2)
 
-    ttk.Label(f, text="Output (blank = auto):").grid(row=1, column=0, sticky="w")
+    ttk.Label(f, text="Output").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
     out = ttk.Entry(f)
-    out.grid(row=1, column=1, sticky="we", padx=6)
-    ttk.Label(f, text="Backup (blank = auto):").grid(row=2, column=0, sticky="w")
-    backup = ttk.Entry(f)
-    backup.grid(row=2, column=1, sticky="we", padx=6)
+    out.grid(row=1, column=1, sticky="we", padx=(0, 6), pady=(6, 0))
 
-    result = tk.StringVar()
     btn = ttk.Button(f, text="Build patched image")
-    btn.grid(row=3, column=1, sticky="w", pady=6)
+    btn.grid(row=2, column=1, sticky="w", pady=(8, 0))
 
     def work():
         if not stock.get().strip():
             raise SystemExit("Choose a stock firmware image first.")
-        return patch_firmware.build_patched(stock.get(), out.get().strip() or None, backup.get().strip() or None)
+        return patch_firmware.build_patched(stock.get(), out.get().strip() or None)
 
     def done(res):
         o, b, n, ok = res
-        result.set(
-            f"Patched image : {o} {n} bytes\n"
-            f"Stock backup  : {b}\n"
-            f"MD5 Verifies  : {ok}\n"
-            f"Magic         : 0x{build_patch.MAGIC:08X}\n"
-            f"stub @ VA 0x{build_patch.STUB:X} (file 0x{build_patch.STUB - o3c_fw.LOAD_ADDR:X}), hook @ VA 0x8508")
+        log(f"Patched: {o}\nBackup:  {b}\nVerified: {'yes' if ok else 'no'}     ({n:,} bytes)", warn=not ok)
 
-    btn.configure(command=lambda: run_async(btn, work, done))
-    ttk.Label(f, textvariable=result, justify="left", font=("Courier New", 9)).grid(
-        row=4, column=0, columnspan=3, sticky="w")
+    btn.configure(command=lambda: run_async(btn, "Building patched image...", work, done))
 
 
-def build_read(parent):
-    f = section(parent, "3. Read counts")
-    result = tk.StringVar()
-    btn = ttk.Button(f, text="Read counts")
-    btn.grid(row=0, column=0, sticky="w")
-    btn.configure(command=lambda: run_async(
-        btn, lambda: with_device(set_counts.read_counts),
-        lambda vals: result.set(fmt_counts("current", vals))))
-    ttk.Label(f, textvariable=result, justify="left").grid(row=1, column=0, columnspan=3, sticky="w", pady=(6, 0))
+def build_flash(parent):
+    f = ttk.LabelFrame(parent, text="Flash firmware", padding=PAD)
+    f.pack(fill="x", padx=PAD, pady=4)
+    f.columnconfigure(1, weight=1)
+
+    ttk.Label(f, text="Image").grid(row=0, column=0, sticky="w", padx=(0, 8))
+    img = ttk.Entry(f)
+    img.insert(0, "app_O3C_clickset.bin")
+    img.grid(row=0, column=1, sticky="we", padx=(0, 6))
+    ttk.Button(f, text="Browse", width=10, command=lambda: pick_into(img)).grid(row=0, column=2)
+
+    ttk.Label(f, text="Put the device in bootloader mode first (hold the knob 2-3s, or Jump to bootloader). "
+                      "o3cpatch downloads automatically on first use. Do not unplug while flashing.",
+              foreground=MUTED, wraplength=520, justify="left").grid(
+        row=1, column=0, columnspan=3, sticky="w", pady=(6, 0))
+
+    btn = ttk.Button(f, text="Flash")
+    btn.grid(row=2, column=1, sticky="w", pady=(8, 0))
+
+    def work():
+        if not img.get().strip():
+            raise SystemExit("Choose a firmware image to flash.")
+        line = lambda s: btn.after(0, lambda: log(s))
+        return flash_firmware.flash(img.get().strip(), on_line=line, gui=True)
+
+    def done(code):
+        log("Flash complete." if code == 0 else f"Flash finished with code {code} (see output).", warn=code != 0)
+
+    def go():
+        if not messagebox.askyesno(
+                "Flash firmware",
+                "This overwrites the device firmware using o3cpatch's upgrade.exe.\n\n"
+                "Is the device in bootloader mode (hold the knob 2-3s, or Jump to bootloader)?\n"
+                "Do not unplug during flashing.\n\nContinue?"):
+            set_status("Flash cancelled")
+            return
+        run_async(btn, "Flashing firmware...", work, done)
+
+    btn.configure(command=go)
 
 
-def build_set(parent):
-    f = section(parent, "4. Set counts")
+def build_counts(parent):
+    f = ttk.LabelFrame(parent, text="Key press counts", padding=PAD)
+    f.pack(fill="x", padx=PAD, pady=4)
+
+    fields = ttk.Frame(f)
+    fields.grid(row=0, column=0, sticky="w")
     entries = {}
     for i, k in enumerate(set_counts.KEYS):
-        ttk.Label(f, text=f"{k}:").grid(row=0, column=2 * i, sticky="e")
-        e = ttk.Entry(f, width=12)
-        e.grid(row=0, column=2 * i + 1, padx=(2, 10))
+        ttk.Label(fields, text=k.capitalize()).grid(row=0, column=2 * i, sticky="e", padx=(0 if i == 0 else 16, 4))
+        e = ttk.Entry(fields, width=12)
+        e.grid(row=0, column=2 * i + 1)
         entries[k] = e
-    ttk.Label(f, text="(blank = keep current)").grid(row=1, column=0, columnspan=6, sticky="w")
 
-    ttk.Label(f, text="Backup file:").grid(row=2, column=0, sticky="e")
-    backup = ttk.Entry(f, width=24)
-    backup.insert(0, "counts_backup.txt")
-    backup.grid(row=2, column=1, columnspan=3, sticky="w", padx=2, pady=4)
+    ttk.Label(f, text="Leave a field blank to keep its current value.", foreground=MUTED).grid(
+        row=1, column=0, sticky="w", pady=(4, 0))
 
-    result = tk.StringVar()
-    btn = ttk.Button(f, text="Write counts")
-    btn.grid(row=3, column=0, sticky="w", pady=4)
-    ttk.Label(f, textvariable=result, justify="left").grid(row=4, column=0, columnspan=6, sticky="w")
+    buttons = ttk.Frame(f)
+    buttons.grid(row=2, column=0, sticky="w", pady=(8, 0))
+    read_btn = ttk.Button(buttons, text="Read", width=12)
+    read_btn.grid(row=0, column=0, padx=(0, 6))
+    write_btn = ttk.Button(buttons, text="Write", width=12)
+    write_btn.grid(row=0, column=1)
 
-    def do_set():
+    def show_current(vals):
+        log("Current:  " + fmt_counts(vals))
+
+    read_btn.configure(command=lambda: run_async(
+        read_btn, "Reading counts...", lambda: with_device(set_counts.read_counts), show_current))
+
+    def do_write():
         wanted = {}
         for k in set_counts.KEYS:
             s = entries[k].get().strip()
@@ -156,22 +204,22 @@ def build_set(parent):
             try:
                 v = int(s)
             except ValueError:
-                messagebox.showerror("Error", f"{k} must be a whole number")
+                messagebox.showerror("Error", f"{k.capitalize()} must be a whole number.")
                 return
             if not (0 <= v <= 0xFFFFFFFF):
-                messagebox.showerror("Error", "Counts must be 0 .. 4294967295")
+                messagebox.showerror("Error", "Counts must be 0 .. 4294967295.")
                 return
             wanted[k] = v
 
         def after_read(current):
-            result.set(fmt_counts("current", current))
+            show_current(current)
             if not messagebox.askyesno(
                     "Safety check",
-                    "The 'current' values shown above must match the all-time counts on your "
-                    "device screen.\n\nIf they do NOT match, choose No to abort.\n\nDo they match?"):
-                result.set("Aborted")
+                    "The current values shown must match the all-time counts on your device "
+                    "screen.\n\nIf they do not match, choose No to abort.\n\nDo they match?"):
+                set_status("Write aborted")
                 return
-            with open(backup.get(), "w") as fh:
+            with open(BACKUP_FILE, "w") as fh:
                 fh.write(f"left={current[0]} middle={current[1]} right={current[2]} slot4={current[3]}\n")
             new = list(current)
             for i, k in enumerate(set_counts.KEYS):
@@ -179,31 +227,62 @@ def build_set(parent):
                     new[i] = wanted[k]
 
             def after_write(res):
-                prev, after = res
-                lines = [f"Backup saved to {backup.get()}", fmt_counts("writing", new)]
-                if prev[:3] != current[:3]:
-                    lines.append("Note: pre-write snapshot differs from first read")
-                lines.append(fmt_counts("readback", after))
-                lines.append("OK" if after[:3] == new[:3] else "WARNING: readback does not match")
-                result.set("\n".join(lines))
+                _, after = res
+                if after[:3] == new[:3]:
+                    log("Current:  " + fmt_counts(after))
+                    log(f"Counts written. Backup saved to {BACKUP_FILE}")
+                    set_status(f"Counts written. Backup saved to {BACKUP_FILE}")
+                else:
+                    log("Current:  " + fmt_counts(after) + "  (readback mismatch)", warn=True)
+                    set_status("Readback mismatch")
+                    messagebox.showwarning(
+                        "Readback mismatch",
+                        "The values read back do not match what was written.\n"
+                        "Key presses between write and read can cause this.")
 
-            run_async(btn, lambda: with_device(
+            run_async(write_btn, "Writing counts...", lambda: with_device(
                 lambda dev: (set_counts.write_counts(dev, new), set_counts.read_counts(dev))), after_write)
 
-        run_async(btn, lambda: with_device(set_counts.read_counts), after_read)
+        run_async(write_btn, "Reading counts...", lambda: with_device(set_counts.read_counts), after_read)
 
-    btn.configure(command=do_set)
+    write_btn.configure(command=do_write)
+
+
+def build_ui(root):
+    global status, progress, output
+    root.title("SayoDevice O3C clickset")
+    root.minsize(540, 0)
+    try:
+        ttk.Style().theme_use("vista")
+    except tk.TclError:
+        pass
+
+    build_download(root)
+    build_patch(root)
+    build_flash(root)
+    build_counts(root)
+
+    bar = ttk.Frame(root, relief="groove", padding=(PAD, 4))
+    bar.pack(fill="x", side="bottom")
+    status = tk.StringVar(value="Ready")
+    ttk.Label(bar, textvariable=status, foreground=MUTED).pack(side="left")
+    progress = ttk.Progressbar(bar, mode="determinate", length=160)
+    progress.pack(side="right")
+
+    out_frame = ttk.LabelFrame(root, text="Output", padding=(PAD, 4))
+    out_frame.pack(fill="both", expand=True, padx=PAD, pady=(4, 6))
+    scroll = ttk.Scrollbar(out_frame)
+    scroll.pack(side="right", fill="y")
+    output = tk.Text(out_frame, height=7, wrap="word", state="disabled",
+                     relief="flat", background="#f6f6f6", yscrollcommand=scroll.set)
+    output.pack(side="left", fill="both", expand=True)
+    scroll.config(command=output.yview)
+    output.tag_config("warn", foreground=ERROR)
 
 
 def main():
     root = tk.Tk()
-    root.title("SayoDevice O3C clickset")
-    build_download(root)
-    build_patch_section(root)
-    ttk.Label(root, text="Then flash the patched image with SayoDevice's flasher, then read or set counts below.",
-              wraplength=470, foreground="#555").pack(fill="x", padx=12, pady=(0, 2))
-    build_read(root)
-    build_set(root)
+    build_ui(root)
     root.mainloop()
 
 
