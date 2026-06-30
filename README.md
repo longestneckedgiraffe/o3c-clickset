@@ -1,9 +1,5 @@
 # o3c-clickset
 
-<p align="center">
-  <img src="assets/demo.gif" alt="clickset demo" width="707">
-</p>
-
 Patches SayoDevice O3C firmware 1.4.12 to add a click-counter command, then reads and sets the device's all-time key press counts over USB HID.
 
 > [!CAUTION]
@@ -32,9 +28,9 @@ run.bat
 
 Then, in the window:
 
-1. Click *Download* to fetch the stock firmware (`app_O3C.bin`).
+1. Click *Download* to fetch the stock firmware from SayoDevice's CDN.
 2. In *Patch*, pick `app_O3c.bin` and press *Build* to produce the patched `app_O3C_clickset.bin`.
-3. Put the device in bootloader mode (hold the knob 2-3s -> Device -> Factory Recovery -> Jump to bootloader), then click *Flash* and confirm. Do not unplug while o3cpatch runs.
+3. Click *Flash* and confirm.
 4. Once the patched firmware is on the device, in *Counts* click *Read* to show the current values, type the new counts, and click *Write* to write the values.
 5. Optionally, flash back the stock 1.4.12 on [sayodevice.com](https://sayodevice.com).
 
@@ -50,14 +46,13 @@ python set_counts.py set --left n --middle n --right n
 
 ## Architecture
 
-- The firmware is decrypted and has the custom read and write operations spliced in, the integrity checksum is fixed and the firmware is re-encrypted before being flashed onto the device. The app sends a custom request to interact with the new read and write commands to modify the key press counts stored in the device's memory.
-- [IDA Pro](https://hex-rays.com/ida-pro) 9.3 was used to analyze the binary and obtain the necessary information to create the patcher.
+- [IDA Pro](https://hex-rays.com/ida-pro) 9.3 was used to analyze the stock firmware and obtain the necessary information to create the patcher. Future updates will likely require using a similar [disassembler](https://en.wikipedia.org/wiki/Disassembler).
 
 ## FAQ
 
 **Can this brick or destroy my SayoDevice?**
 
-No, it's virtually impossible. The flashing utility and this application never touch the bootloader. If anything goes wrong, you can easily reflash stock firmware at [sayodevice.com](https://sayodevice.com).
+No. The flashing utility and this application never touch the bootloader. If anything goes wrong, you can easily reflash stock firmware at [sayodevice.com](https://sayodevice.com).
 
 **Will my settings change or get overridden?**
 
@@ -79,14 +74,14 @@ The most common issues are:
   - Download the [latest version of Python](https://www.python.org/downloads/).
 - Your Sayodevice O3C is not plugged in.
 - You're not displaying lifetime counts on your device.
-  - Hold the knob, go to *Display* -> *Main screen*, and set *Key count* to *all*, which shows lifetime presses.
+  - Hold the knob, go to *Display* -> *Main screen*, and set *Key count* to *ALL*, which shows lifetime presses.
 - You're device is not on firmware version 1.4.12.
 - This project is out of date.
 
 ## Attribution
 
 - [o3cpatch](https://github.com/Vali0004/o3cpatch)
-  - Flashing wraps its `upgrade.exe`. o3cpatch is automatically downloaded to flash the image.
+  - o3cpatch is automatically downloaded and used in this project to flash the firmware.
 
 ## License
 
