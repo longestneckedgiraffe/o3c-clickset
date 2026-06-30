@@ -7,7 +7,11 @@ Patches SayoDevice O3C firmware 1.4.12 to add a click-counter command, then read
 
 ## Install
 
+First, install [Git](https://git-scm.com/downloads) and [Python](https://www.python.org/downloads/) if you don't already have them. Then:
+
 ```sh
+git clone https://github.com/longestneckedgiraffe/o3c-clickset.git
+cd o3c-clickset
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
