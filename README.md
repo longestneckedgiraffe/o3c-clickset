@@ -74,12 +74,10 @@ Yes. Once the custom firmware is flashed and a count is written over HID, it is 
 
 The most common issues are:
 
-- Python isn't installed.
-  - Download the [latest version of Python](https://www.python.org/downloads/).
-- Your Sayodevice O3C is not plugged in.
+- You're device is not on firmware version 1.4.12.
 - You're not displaying lifetime counts on your device.
   - Hold the knob, go to *Display* -> *Main screen*, and set *Key count* to *ALL*, which shows lifetime presses.
-- You're device is not on firmware version 1.4.12.
+- Your Sayodevice O3C is not plugged in.
 - This project is out of date.
 
 ## Attribution
