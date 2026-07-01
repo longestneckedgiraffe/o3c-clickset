@@ -1,5 +1,7 @@
 # o3c-clickset
 
+<p align="center"><img src="assets/demo.gif" alt="demo"></p>
+
 Patches SayoDevice O3C firmware 1.4.12 to add a click-counter command, then reads and sets the device's all-time key press counts over USB HID.
 
 > [!CAUTION]
