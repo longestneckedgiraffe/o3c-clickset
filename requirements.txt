@@ -1,2 +1,2 @@
-pycryptodome
-hidapi
+pycryptodome==3.23.0
+hidapi==0.15.0

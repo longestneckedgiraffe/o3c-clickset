@@ -3,7 +3,7 @@
 Patches SayoDevice O3C firmware 1.4.12 to add a click-counter command, then reads and sets the device's all-time key press counts over USB HID.
 
 > [!CAUTION]
-> This flashes custom firmware and writes directly to your device over USB HID. It only works on SayoDevice O3C firmware 1.4.12, and writing counts is irreversible. Back up your factory counts before modifying and use at your own risk!
+> This flashes custom firmware and writes directly to your device over USB HID. It only works on SayoDevice O3C firmware 1.4.12. The current counts are backed up before every write, but you should still use this project at your own risk.
 
 ## Install
 
@@ -32,10 +32,10 @@ run.bat
 
 Then, in the window:
 
-1. Click *Download* to fetch the stock firmware from SayoDevice's CDN.
-2. In *Patch*, pick `app_O3c.bin` and press *Build* to produce the patched `app_O3C_clickset.bin`.
-3. Click *Flash* and confirm.
-4. Once the patched firmware is on the device, in *Counts* click *Read* to show the current values, type the new counts, and click *Write* to write the values.
+1. Click **Download** to fetch the stock firmware from SayoDevice's CDN.
+2. In **Patch**, pick `app_O3C.bin` and press **Build** to produce the patched `app_O3C_clickset.bin`.
+3. Click **Flash**. A pinned o3cpatch utility is downloaded, verified, used, and removed automatically. It puts the device in bootloader mode; do not unplug it during flashing. Close the utility after it reports a successful flash.
+4. Once the patched firmware is on the device, in **Counts** click **Read** to show the current values, type the new counts, and click **Write** to write the values.
 5. Optionally, flash back the stock 1.4.12 on [sayodevice.com](https://sayodevice.com).
 
 ### CLI
@@ -50,13 +50,26 @@ python set_counts.py set --left n --middle n --right n
 
 ## Architecture
 
-- [IDA Pro](https://hex-rays.com/ida-pro) 9.3 was used to analyze the stock firmware and obtain the necessary information to create the patcher. Future updates will likely require using a similar [disassembler](https://en.wikipedia.org/wiki/Disassembler).
+- The downloader accepts only the known SHA-256 hash for O3C firmware 1.4.12.
+- The patcher verifies the original bytes at every fixed patch location before modifying the firmware.
+- The flasher downloads a pinned o3cpatch commit into a temporary directory and verifies the executable, configuration, and license before use.
+- [IDA Pro](https://hex-rays.com/ida-pro) 9.3 was used to analyze the stock firmware. Supporting another firmware version will require a new analysis and another round of device testing.
+
+## Development
+
+Install the optional disassembly dependency and run the automated tests with:
+
+```sh
+pip install -r requirements-dev.txt
+python -m unittest discover -s tests -v
+python build_patch.py
+```
 
 ## FAQ
 
 **Can this brick or destroy my SayoDevice?**
 
-No. The flashing utility and this application never touch the bootloader. If anything goes wrong, you can easily reflash stock firmware at [sayodevice.com](https://sayodevice.com).
+No. The flashing utility enters bootloader mode but does not overwrite the bootloader. If anything goes wrong, you can easily reflash stock firmware at [sayodevice.com](https://sayodevice.com).
 
 **Will my settings change or get overridden?**
 
@@ -64,19 +77,19 @@ No. Your settings (actuation, lighting, etc) are not affected by the firmware fl
 
 **Is the binary patching version independent?**
 
-No. The patch targets a specific firmware version. The downloader always fetches the latest version, which as of now is 1.4.12. If the latest version ever changes, this project is broken until it's updated and the patching utility will fail.
+No. The patch targets firmware 1.4.12. The downloader and patcher both reject any image that does not match the known 1.4.12 hash, so a future firmware update will fail safely until the project is updated and retested.
 
 **Are these changes permanent?**
 
-Yes. Once the custom firmware is flashed and a count is written over HID, it is irreversible. If you want to keep your factory counts, store them somewhere before modifying and write them back afterward. You can safely overwrite the firmware later by reflashing the latest version on [sayodevice.com](https://sayodevice.com); the counts persist.
+A write replaces the stored counts. Both the GUI and CLI first save the current values to `counts_backup.txt`, allowing you to write them back later. You can safely overwrite the custom firmware by reflashing the latest version on [sayodevice.com](https://sayodevice.com); the counts persist.
 
 **Why isn't it working?**
 
 The most common issues are:
 
-- You're device is not on firmware version 1.4.12.
+- Your device is not on firmware version 1.4.12.
 - You're not displaying lifetime counts on your device.
-  - Hold the knob, go to *Display* -> *Main screen*, and set *Key count* to *ALL*, which shows lifetime presses.
+  - Hold the knob, go to **Display** -> **Main screen**, and set **Key count** to **ALL**, which shows lifetime presses.
 - Your Sayodevice O3C is not plugged in.
 - This project is out of date.
 

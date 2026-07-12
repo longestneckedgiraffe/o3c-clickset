@@ -1,3 +1,4 @@
+import queue
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -21,6 +22,9 @@ state = {}
 count_current = {}
 count_entry = {}
 read_btn = write_btn = None
+action_buttons = []
+ui_events = queue.Queue()
+busy = False
 
 
 def log(text, tag=None):
@@ -30,14 +34,37 @@ def log(text, tag=None):
     output["state"] = "disabled"
 
 
-def run_async(button, busy_message, work, on_done):
-    button["state"] = "disabled"
+def post_ui(fn):
+    ui_events.put(fn)
+
+
+def process_ui_events():
+    try:
+        while True:
+            ui_events.get_nowait()()
+    except queue.Empty:
+        pass
+    root.after(25, process_ui_events)
+
+
+def set_busy(value):
+    global busy
+    busy = value
+    button_state = "disabled" if value else "normal"
+    for button in action_buttons:
+        button["state"] = button_state
+
+
+def run_async(busy_message, work, on_done):
+    if busy:
+        return
+    set_busy(True)
     status.set(busy_message)
     progress.config(mode="indeterminate")
     progress.start(18)
 
     def finish(result, err):
-        button["state"] = "normal"
+        set_busy(False)
         progress.stop()
         progress.config(mode="determinate", value=0)
         if err is not None:
@@ -53,7 +80,7 @@ def run_async(button, busy_message, work, on_done):
             result, err = None, str(e.code)
         except Exception as e:
             result, err = None, str(e)
-        button.after(0, lambda: finish(result, err))
+        post_ui(lambda: finish(result, err))
 
     threading.Thread(target=worker, daemon=True).start()
 
@@ -88,12 +115,6 @@ def pick_open(entry):
         set_entry(entry, path)
 
 
-def pick_save(entry, default):
-    path = filedialog.asksaveasfilename(title="Save as", initialfile=default, defaultextension=".bin")
-    if path:
-        set_entry(entry, path)
-
-
 def set_entry(entry, text):
     entry.delete(0, "end")
     entry.insert(0, text)
@@ -109,6 +130,7 @@ def build_download(parent):
     f = section(parent, "Download")
     btn = ttk.Button(f, text="Download", width=18)
     btn.pack(anchor="w")
+    action_buttons.append(btn)
 
     def done(res):
         n, ok = res
@@ -119,7 +141,7 @@ def build_download(parent):
         status.set(f"Downloaded {STOCK_NAME}" if ok else f"Downloaded {STOCK_NAME} (failed verify)")
 
     btn.configure(command=lambda: run_async(
-        btn, "Downloading firmware...", lambda: download_firmware.download(STOCK_NAME), done))
+        "Downloading firmware...", lambda: download_firmware.download(STOCK_NAME), done))
 
 
 def build_patch(parent):
@@ -137,12 +159,14 @@ def build_patch(parent):
 
     btn = ttk.Button(f, text="Build", width=18)
     btn.pack(anchor="w", pady=(8, 0))
+    action_buttons.append(btn)
 
-    def work():
+    def go():
         s = stock.get().strip()
         if not s:
-            raise SystemExit("Choose a firmware image first.")
-        return patch_firmware.build_patched(s, None)
+            messagebox.showerror("Error", "Choose a firmware image first.")
+            return
+        run_async("Building patched image...", lambda: patch_firmware.build_patched(s, None), done)
 
     def done(res):
         o, b, n, ok = res
@@ -152,7 +176,7 @@ def build_patch(parent):
         log(f"Verified: {'yes' if ok else 'NO'}   ({n:,} bytes)", "ok" if ok else "warn")
         status.set(f"Built {o}" if ok else f"Built {o} (failed verify)")
 
-    btn.configure(command=lambda: run_async(btn, "Building patched image...", work, done))
+    btn.configure(command=go)
 
 
 def build_flash(parent):
@@ -170,15 +194,19 @@ def build_flash(parent):
 
     btn = ttk.Button(f, text="Flash", width=18)
     btn.pack(anchor="w", pady=(8, 0))
+    action_buttons.append(btn)
 
-    def work():
-        if not img.get().strip():
-            raise SystemExit("Choose a firmware image to flash.")
+    def go():
+        image_path = img.get().strip()
+        if not image_path:
+            messagebox.showerror("Error", "Choose a firmware image to flash.")
+            return
 
         def line(s):
-            btn.after(0, lambda: (log(s), status.set(s)))
+            post_ui(lambda: (log(s), status.set(s)))
 
-        return flash_firmware.flash(img.get().strip(), on_line=line, gui=True)
+        run_async("Flashing firmware...", lambda: flash_firmware.flash(
+            image_path, on_line=line, gui=True), done)
 
     def done(code):
         if code == 0 or code == CTRL_CLOSE_EXIT:
@@ -188,15 +216,6 @@ def build_flash(parent):
             log(f"Flash finished with code {code} (see output).", "warn")
             status.set(f"Flash failed (code {code})")
         root.after(1000, refresh_device)
-
-    def go():
-        if not messagebox.askyesno(
-                "clickset",
-                "Please confirm that your device is in bootloader mode\nHold your Sayodevice's knob for 2-3 seconds -> Device -> Factory Recovery -> Jump to bootloader\n\n"
-                "Do not unplug during flashing!\nContinue?"):
-            status.set("Flash cancelled")
-            return
-        run_async(btn, "Flashing firmware...", work, done)
 
     btn.configure(command=go)
 
@@ -230,13 +249,14 @@ def build_counts(parent):
     read_btn.grid(row=0, column=0, padx=(0, 6))
     write_btn = ttk.Button(br, text="Write", width=12)
     write_btn.grid(row=0, column=1)
+    action_buttons.extend((read_btn, write_btn))
 
     def did_read(vals):
         show_current(vals)
         status.set("Counts read")
 
     read_btn.configure(command=lambda: run_async(
-        read_btn, "Reading counts...", lambda: with_device(set_counts.read_counts), did_read))
+        "Reading counts...", lambda: with_device(set_counts.read_counts), did_read))
     write_btn.configure(command=do_write)
 
 
@@ -249,47 +269,36 @@ def do_write():
             return
         wanted[k] = v
 
-    def after_read(current):
+    def after_write(result):
+        current, new, previous, after = result
         show_current(current)
-        if not messagebox.askyesno(
-                "Safety check",
-                "The current values shown must match the all-time counts on your device "
-                "screen.\n\nIf they do not match, choose No to abort.\n\nDo they match?"):
-            status.set("Write aborted")
-            return
-        new = list(current)
-        for i, k in enumerate(set_counts.KEYS):
-            if wanted[k] is not None:
-                new[i] = wanted[k]
+        log(f"Backup saved to {set_counts.BACKUP_NAME}")
+        if previous[:3] != current[:3]:
+            log("Pre-write snapshot differs from first read", "warn")
+        show_current(after)
+        if after[:3] == new[:3]:
+            log("Counts written.", "ok")
+            status.set("Counts written")
+        else:
+            log("Readback mismatch", "warn")
+            status.set("Readback mismatch")
+            messagebox.showwarning(
+                "Readback mismatch",
+                "The values read back do not match what was written.\n"
+                "Key presses between write and read can cause this.")
 
-        def after_write(res):
-            _, after = res
-            show_current(after)
-            if after[:3] == new[:3]:
-                log("Counts written.", "ok")
-                status.set("Counts written")
-            else:
-                log("Readback mismatch", "warn")
-                status.set("Readback mismatch")
-                messagebox.showwarning(
-                    "Readback mismatch",
-                    "The values read back do not match what was written.\n"
-                    "Key presses between write and read can cause this.")
-
-        run_async(write_btn, "Writing counts...", lambda: with_device(
-            lambda dev: (set_counts.write_counts(dev, new), set_counts.read_counts(dev))), after_write)
-
-    run_async(write_btn, "Reading counts...", lambda: with_device(set_counts.read_counts), after_read)
+    run_async("Writing counts...", lambda: with_device(
+        lambda dev: set_counts.update_counts(dev, wanted)), after_write)
 
 
 def probe_device():
     try:
         dev = set_counts.open_device()
-    except SystemExit:
+    except set_counts.DeviceNotFound:
         return "absent", None
     try:
         vals = set_counts.read_counts(dev)
-    except SystemExit:
+    except set_counts.DeviceResponseError:
         return "stock", None
     finally:
         dev.close()
@@ -299,13 +308,10 @@ def probe_device():
 
 
 def refresh_device():
-    status.set("Checking device...")
-
-    def worker():
-        res = probe_device()
-        root.after(0, lambda: apply_device(res))
-
-    threading.Thread(target=worker, daemon=True).start()
+    if busy:
+        root.after(250, refresh_device)
+        return
+    run_async("Checking device...", probe_device, apply_device)
 
 
 def apply_device(res):
@@ -354,6 +360,7 @@ def build_ui(window):
     build_flash(content)
     build_counts(content)
 
+    root.after(25, process_ui_events)
     root.after(150, refresh_device)
 
 

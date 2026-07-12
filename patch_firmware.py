@@ -1,41 +1,66 @@
 import argparse
+import hashlib
 import os
-import o3c_fw
+
 import build_patch
+import file_utils
+import o3c_fw
+
+EXPECTED_BYTES = {
+    build_patch.HOOK: build_patch.DISPLACED,
+    build_patch.STUB: bytes(96),
+    build_patch.RESTORE: bytes(4),
+    build_patch.REJOIN: bytes(4),
+}
 
 
 def apply_patches(dec):
     out = bytearray(dec)
     for va, data in build_patch.patches():
         off = va - o3c_fw.LOAD_ADDR
-        assert 0 <= off and off + len(data) <= o3c_fw.image_size(dec), f"Patch at 0x{va:X} outside image"
+        if not 0 <= off or off + len(data) > o3c_fw.image_size(dec):
+            raise SystemExit(f"Patch at 0x{va:X} is outside the firmware image")
+        if dec[off:off + len(data)] != EXPECTED_BYTES[va]:
+            raise SystemExit(f"Firmware bytes at patch location 0x{va:X} are unexpected")
         out[off:off + len(data)] = data
     return bytes(out)
 
 
 def load_decrypted(path):
-    raw = open(path, "rb").read()
-    if o3c_fw.verify(raw):
-        return raw
-    dec = o3c_fw.decrypt(raw)
-    if o3c_fw.verify(dec):
-        return dec
-    raise SystemExit("Input is neither a valid decrypted image nor a decryptable stock image")
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+    except OSError as e:
+        raise SystemExit(f"Could not read firmware image: {e}") from e
+
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest == o3c_fw.STOCK_DECRYPTED_SHA256:
+        dec = raw
+    elif digest == o3c_fw.STOCK_ENCRYPTED_SHA256:
+        dec = o3c_fw.decrypt(raw)
+    else:
+        raise SystemExit(f"Input is not supported O3C firmware {o3c_fw.VERSION}")
+    if not o3c_fw.verify(dec):
+        raise SystemExit("Input firmware failed internal verification")
+    return dec
 
 
 def selfcheck(patched_enc, stock_dec):
     dec = o3c_fw.decrypt(patched_enc)
-    assert o3c_fw.verify(dec), "Patched image MD5 does not verify"
+    if not o3c_fw.verify(dec):
+        raise SystemExit("Patched image failed internal verification")
     for va, data in build_patch.patches():
         off = va - o3c_fw.LOAD_ADDR
-        assert dec[off:off + len(data)] == data, f"Patch missing at 0x{va:X}"
+        if dec[off:off + len(data)] != data:
+            raise SystemExit(f"Patch is missing at 0x{va:X}")
     untouched = bytearray(dec)
     for va, data in build_patch.patches():
         off = va - o3c_fw.LOAD_ADDR
         untouched[off:off + len(data)] = stock_dec[off:off + len(data)]
     su = bytearray(stock_dec)
     su[o3c_fw.MD5_OFF:o3c_fw.MD5_OFF + 16] = untouched[o3c_fw.MD5_OFF:o3c_fw.MD5_OFF + 16]
-    assert bytes(untouched) == bytes(su), "Patch changed bytes outside the intended regions"
+    if bytes(untouched) != bytes(su):
+        raise SystemExit("Patch changed bytes outside the intended regions")
 
 
 def build_patched(stock_path, out=None, backup=None):
@@ -46,9 +71,18 @@ def build_patched(stock_path, out=None, backup=None):
 
     out = out or os.path.splitext(stock_path)[0] + "_clickset.bin"
     backup = backup or os.path.splitext(stock_path)[0] + "_stock_backup.bin"
-    open(out, "wb").write(patched_enc)
-    if not os.path.exists(backup):
-        open(backup, "wb").write(o3c_fw.encrypt(stock_dec))
+    stock_enc = o3c_fw.encrypt(stock_dec)
+    if os.path.exists(backup):
+        with open(backup, "rb") as f:
+            existing_backup = f.read()
+        if existing_backup != stock_enc:
+            raise SystemExit(f"Existing stock backup does not match firmware {o3c_fw.VERSION}: {backup}")
+    try:
+        if not os.path.exists(backup):
+            file_utils.atomic_write_bytes(backup, stock_enc)
+        file_utils.atomic_write_bytes(out, patched_enc)
+    except OSError as e:
+        raise SystemExit(f"Could not save patched firmware: {e}") from e
     return out, backup, len(patched_enc), o3c_fw.verify(patched_dec)
 
 
