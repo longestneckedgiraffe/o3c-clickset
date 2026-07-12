@@ -4,6 +4,8 @@ import sys
 import time
 import hid
 
+import file_utils
+
 VID = 0x8089
 PID = 0x0009
 USAGE_PAGE = 0xFF00
@@ -95,8 +97,11 @@ def merge_counts(current, wanted):
 
 
 def save_backup(path, current):
-    with open(path, "w") as f:
-        f.write(f"left={current[0]} middle={current[1]} right={current[2]} slot4={current[3]}\n")
+    contents = f"left={current[0]} middle={current[1]} right={current[2]} slot4={current[3]}\n"
+    try:
+        file_utils.atomic_write_text(path, contents)
+    except OSError as e:
+        raise ClicksetError(f"Could not save count backup: {e}") from e
 
 
 def update_counts(dev, wanted, backup=BACKUP_NAME):

@@ -1,8 +1,10 @@
 import argparse
 import hashlib
 import os
-import o3c_fw
+
 import build_patch
+import file_utils
+import o3c_fw
 
 EXPECTED_BYTES = {
     build_patch.HOOK: build_patch.DISPLACED,
@@ -75,9 +77,12 @@ def build_patched(stock_path, out=None, backup=None):
             existing_backup = f.read()
         if existing_backup != stock_enc:
             raise SystemExit(f"Existing stock backup does not match firmware {o3c_fw.VERSION}: {backup}")
-    else:
-        open(backup, "wb").write(stock_enc)
-    open(out, "wb").write(patched_enc)
+    try:
+        if not os.path.exists(backup):
+            file_utils.atomic_write_bytes(backup, stock_enc)
+        file_utils.atomic_write_bytes(out, patched_enc)
+    except OSError as e:
+        raise SystemExit(f"Could not save patched firmware: {e}") from e
     return out, backup, len(patched_enc), o3c_fw.verify(patched_dec)
 
 
