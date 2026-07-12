@@ -240,41 +240,36 @@ def do_write():
             return
         wanted[k] = v
 
-    def after_read(current):
+    def after_write(result):
+        current, new, previous, after = result
         show_current(current)
-        new = list(current)
-        for i, k in enumerate(set_counts.KEYS):
-            if wanted[k] is not None:
-                new[i] = wanted[k]
+        log(f"Backup saved to {set_counts.BACKUP_NAME}")
+        if previous[:3] != current[:3]:
+            log("Pre-write snapshot differs from first read", "warn")
+        show_current(after)
+        if after[:3] == new[:3]:
+            log("Counts written.", "ok")
+            status.set("Counts written")
+        else:
+            log("Readback mismatch", "warn")
+            status.set("Readback mismatch")
+            messagebox.showwarning(
+                "Readback mismatch",
+                "The values read back do not match what was written.\n"
+                "Key presses between write and read can cause this.")
 
-        def after_write(res):
-            _, after = res
-            show_current(after)
-            if after[:3] == new[:3]:
-                log("Counts written.", "ok")
-                status.set("Counts written")
-            else:
-                log("Readback mismatch", "warn")
-                status.set("Readback mismatch")
-                messagebox.showwarning(
-                    "Readback mismatch",
-                    "The values read back do not match what was written.\n"
-                    "Key presses between write and read can cause this.")
-
-        run_async(write_btn, "Writing counts...", lambda: with_device(
-            lambda dev: (set_counts.write_counts(dev, new), set_counts.read_counts(dev))), after_write)
-
-    run_async(write_btn, "Reading counts...", lambda: with_device(set_counts.read_counts), after_read)
+    run_async(write_btn, "Writing counts...", lambda: with_device(
+        lambda dev: set_counts.update_counts(dev, wanted)), after_write)
 
 
 def probe_device():
     try:
         dev = set_counts.open_device()
-    except SystemExit:
+    except set_counts.DeviceNotFound:
         return "absent", None
     try:
         vals = set_counts.read_counts(dev)
-    except SystemExit:
+    except set_counts.DeviceResponseError:
         return "stock", None
     finally:
         dev.close()

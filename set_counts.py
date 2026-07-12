@@ -14,12 +14,29 @@ CMD = 0x50
 MAGIC = 0x5A590000
 RESP_OFF = 8
 KEYS = ("left", "middle", "right")
+BACKUP_NAME = "counts_backup.txt"
+
+
+class ClicksetError(Exception):
+    pass
+
+
+class DeviceNotFound(ClicksetError):
+    pass
+
+
+class DeviceResponseError(ClicksetError):
+    pass
+
+
+class CountValueError(ClicksetError):
+    pass
 
 
 def open_device():
     cands = hid.enumerate(VID, PID)
     if not cands:
-        sys.exit("No SayoDevice O3C found (VID 0x8089 PID 0x0009). Plugged in?")
+        raise DeviceNotFound("No SayoDevice O3C found (VID 0x8089 PID 0x0009). Plugged in?")
     chosen = next((c for c in cands if c.get("usage_page") == USAGE_PAGE), cands[0])
     dev = hid.device()
     dev.open_path(chosen["path"])
@@ -53,16 +70,42 @@ def packet(mode, vals):
 
 def read_counts(dev):
     resp = transact(dev, packet(0, (0, 0, 0, 0)))
-    if not resp or resp[0] != REPORT_ID:
-        sys.exit("No valid response. Is the click-counter firmware flashed?")
+    if len(resp) < RESP_OFF + 16 or resp[0] != REPORT_ID:
+        raise DeviceResponseError("No valid response. Is the click-counter firmware flashed?")
     return list(struct.unpack_from("<4I", bytes(resp), RESP_OFF))
 
 
 def write_counts(dev, vals):
     resp = transact(dev, packet(1, vals))
-    if not resp or resp[0] != REPORT_ID:
-        sys.exit("No valid response to write.")
+    if len(resp) < RESP_OFF + 16 or resp[0] != REPORT_ID:
+        raise DeviceResponseError("No valid response to write.")
     return list(struct.unpack_from("<4I", bytes(resp), RESP_OFF))
+
+
+def merge_counts(current, wanted):
+    new = list(current)
+    for i, key in enumerate(KEYS):
+        value = wanted.get(key)
+        if value is None:
+            continue
+        if not 0 <= value <= 0xFFFFFFFF:
+            raise CountValueError("Counts must be 0 .. 4294967295")
+        new[i] = value
+    return new
+
+
+def save_backup(path, current):
+    with open(path, "w") as f:
+        f.write(f"left={current[0]} middle={current[1]} right={current[2]} slot4={current[3]}\n")
+
+
+def update_counts(dev, wanted, backup=BACKUP_NAME):
+    current = read_counts(dev)
+    new = merge_counts(current, wanted)
+    save_backup(backup, current)
+    previous = write_counts(dev, new)
+    after = read_counts(dev)
+    return current, new, previous, after
 
 
 def show(label, vals):
@@ -76,34 +119,28 @@ def main():
     s = sub.add_parser("set", help="set all-time counts")
     for k in KEYS:
         s.add_argument("--" + k, type=int, help=f"new {k}-key count")
-    s.add_argument("--backup", default="counts_backup.txt", help="file to save current counts to")
+    s.add_argument("--backup", default=BACKUP_NAME, help="file to save current counts to")
     args = ap.parse_args()
 
-    dev = open_device()
-    current = read_counts(dev)
+    try:
+        dev = open_device()
+        try:
+            if args.cmd == "read":
+                show("current", read_counts(dev))
+                return
+
+            wanted = {key: getattr(args, key) for key in KEYS}
+            current, new, previous, after = update_counts(dev, wanted, args.backup)
+        finally:
+            dev.close()
+    except ClicksetError as e:
+        sys.exit(str(e))
+
     show("current", current)
-
-    if args.cmd == "read":
-        return
-
-    for v in (getattr(args, k) for k in KEYS):
-        if v is not None and not (0 <= v <= 0xFFFFFFFF):
-            sys.exit("Counts must be 0 .. 4294967295")
-
-    with open(args.backup, "w") as f:
-        f.write(f"left={current[0]} middle={current[1]} right={current[2]} slot4={current[3]}\n")
     print(f"Backup saved to {args.backup}")
-
-    new = list(current)
-    for i, k in enumerate(KEYS):
-        v = getattr(args, k)
-        if v is not None:
-            new[i] = v
     show("writing", new)
-    prev = write_counts(dev, new)
-    if prev[:3] != current[:3]:
+    if previous[:3] != current[:3]:
         print("Note: pre-write snapshot differs from first read")
-    after = read_counts(dev)
     show("readback", after)
     print("OK" if after[:3] == new[:3]
           else "WARNING: readback does not match")
