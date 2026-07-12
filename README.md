@@ -32,10 +32,10 @@ run.bat
 
 Then, in the window:
 
-1. Click *Download* to fetch the stock firmware from SayoDevice's CDN.
-2. In *Patch*, pick `app_O3c.bin` and press *Build* to produce the patched `app_O3C_clickset.bin`.
-3. Click *Flash* and confirm.
-4. Once the patched firmware is on the device, in *Counts* click *Read* to show the current values, type the new counts, and click *Write* to write the values.
+1. Click **Download** to fetch the stock firmware from SayoDevice's CDN.
+2. In **Patch**, pick `app_O3c.bin` and press **Build** to produce the patched `app_O3C_clickset.bin`.
+3. Click **Flash**. The flashing utility automatically puts the device in bootloader mode; do not unplug it during flashing.
+4. Once the patched firmware is on the device, in **Counts** click **Read** to show the current values, type the new counts, and click **Write** to write the values.
 5. Optionally, flash back the stock 1.4.12 on [sayodevice.com](https://sayodevice.com).
 
 ### CLI
@@ -76,7 +76,7 @@ The most common issues are:
 
 - You're device is not on firmware version 1.4.12.
 - You're not displaying lifetime counts on your device.
-  - Hold the knob, go to *Display* -> *Main screen*, and set *Key count* to *ALL*, which shows lifetime presses.
+  - Hold the knob, go to **Display** -> **Main screen**, and set **Key count** to **ALL**, which shows lifetime presses.
 - Your Sayodevice O3C is not plugged in.
 - This project is out of date.
 

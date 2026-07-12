@@ -59,15 +59,7 @@ def main():
     ap.add_argument("image", nargs="?", default="app_O3C_clickset.bin", help="firmware image to flash")
     ap.add_argument("--root", default=DEFAULT_ROOT, help="o3cpatch folder (auto-downloaded if missing)")
     ap.add_argument("--firmware-name", default=FIRMWARE_NAME, help="target filename under o3cpatch/firmware/")
-    ap.add_argument("--yes", action="store_true", help="skip the bootloader-mode confirmation")
     args = ap.parse_args()
-
-    if not args.yes:
-        print("Please confirm that your device is in bootloader mode")
-        print("Hold your Sayodevice's knob for 2-3 seconds -> Device -> Factory Recovery -> Jump to bootloader")
-        print("Do not unplug the device during flashing!")
-        if input("Device in bootloader mode and ready to flash? [y/N] ").strip().lower() != "y":
-            sys.exit("Aborted. Nothing flashed.")
 
     sys.exit(flash(args.image, root=args.root, firmware_name=args.firmware_name))
 

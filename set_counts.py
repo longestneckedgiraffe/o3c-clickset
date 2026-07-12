@@ -76,7 +76,6 @@ def main():
     s = sub.add_parser("set", help="set all-time counts")
     for k in KEYS:
         s.add_argument("--" + k, type=int, help=f"new {k}-key count")
-    s.add_argument("--yes", action="store_true", help="skip the on-screen confirmation prompt")
     s.add_argument("--backup", default="counts_backup.txt", help="file to save current counts to")
     args = ap.parse_args()
 
@@ -90,12 +89,6 @@ def main():
     for v in (getattr(args, k) for k in KEYS):
         if v is not None and not (0 <= v <= 0xFFFFFFFF):
             sys.exit("Counts must be 0 .. 4294967295")
-
-    if not args.yes:
-        print("\nThe 'current' values above must match the all-time counts")
-        print("shown on your device screen. If they do NOT match, type n to abort")
-        if input("Do they match? [y/N] ").strip().lower() != "y":
-            sys.exit("Aborted")
 
     with open(args.backup, "w") as f:
         f.write(f"left={current[0]} middle={current[1]} right={current[2]} slot4={current[3]}\n")

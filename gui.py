@@ -189,16 +189,7 @@ def build_flash(parent):
             status.set(f"Flash failed (code {code})")
         root.after(1000, refresh_device)
 
-    def go():
-        if not messagebox.askyesno(
-                "clickset",
-                "Please confirm that your device is in bootloader mode\nHold your Sayodevice's knob for 2-3 seconds -> Device -> Factory Recovery -> Jump to bootloader\n\n"
-                "Do not unplug during flashing!\nContinue?"):
-            status.set("Flash cancelled")
-            return
-        run_async(btn, "Flashing firmware...", work, done)
-
-    btn.configure(command=go)
+    btn.configure(command=lambda: run_async(btn, "Flashing firmware...", work, done))
 
 
 def show_current(vals):
@@ -251,12 +242,6 @@ def do_write():
 
     def after_read(current):
         show_current(current)
-        if not messagebox.askyesno(
-                "Safety check",
-                "The current values shown must match the all-time counts on your device "
-                "screen.\n\nIf they do not match, choose No to abort.\n\nDo they match?"):
-            status.set("Write aborted")
-            return
         new = list(current)
         for i, k in enumerate(set_counts.KEYS):
             if wanted[k] is not None:
