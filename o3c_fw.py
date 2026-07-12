@@ -8,6 +8,9 @@ IV = bytes(16)
 LOAD_ADDR = 0x4000
 SIZE_OFF = 0x29F84
 MD5_OFF = 0x29FA0
+VERSION = "1.4.12"
+STOCK_ENCRYPTED_SHA256 = "d81a3e001a2b5f13fcaabfe6a8e357ecaedc14a36ae21cce4f9dc6aed863068f"
+STOCK_DECRYPTED_SHA256 = "283611106fc9504f8ffc03a8604c9ec81daade1f2d67960684076b6766b6fd21"
 
 
 def decrypt(enc):
@@ -23,7 +26,12 @@ def image_size(dec):
 
 
 def verify(dec):
-    return dec[MD5_OFF:MD5_OFF + 16] == hashlib.md5(dec[:image_size(dec)]).digest()
+    if len(dec) < MD5_OFF + 16:
+        return False
+    size = image_size(dec)
+    if size > len(dec):
+        return False
+    return dec[MD5_OFF:MD5_OFF + 16] == hashlib.md5(dec[:size]).digest()
 
 
 def fix_md5(dec):

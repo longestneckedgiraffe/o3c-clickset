@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import urllib.request
 import o3c_fw
 
@@ -8,8 +9,13 @@ URL = "https://a.sayobot.cn/firmware/update/9/firmware/app_O3C.bin"
 def download(out="app_O3C.bin"):
     with urllib.request.urlopen(URL, timeout=60) as r:
         data = r.read()
+    actual_hash = hashlib.sha256(data).hexdigest()
+    if actual_hash != o3c_fw.STOCK_ENCRYPTED_SHA256:
+        raise SystemExit(f"Downloaded firmware is not supported O3C firmware {o3c_fw.VERSION}")
+    if not o3c_fw.verify(o3c_fw.decrypt(data)):
+        raise SystemExit("Downloaded firmware failed internal verification")
     open(out, "wb").write(data)
-    return len(data), o3c_fw.verify(o3c_fw.decrypt(data))
+    return len(data), True
 
 
 def main():
