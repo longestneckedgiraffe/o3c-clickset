@@ -30,29 +30,31 @@ def temporary_o3cpatch(on_line=print):
     if len(data) > O3CPATCH_MAX_BYTES:
         raise SystemExit("o3cpatch download exceeds the expected size")
 
-    with tempfile.TemporaryDirectory(prefix="o3c-clickset-") as root:
-        try:
-            archive = zipfile.ZipFile(io.BytesIO(data))
-        except zipfile.BadZipFile as e:
-            raise SystemExit("o3cpatch download is not a valid ZIP archive") from e
-        with archive:
-            for relative, expected_hash in O3CPATCH_FILES.items():
-                member = O3CPATCH_PREFIX + relative
-                try:
-                    contents = archive.read(member)
-                except KeyError as e:
-                    raise SystemExit(f"o3cpatch archive is missing {relative}") from e
-                actual_hash = hashlib.sha256(contents).hexdigest()
-                if actual_hash != expected_hash:
-                    raise SystemExit(f"o3cpatch verification failed for {relative}")
-                destination = os.path.join(root, *relative.split("/"))
-                os.makedirs(os.path.dirname(destination), exist_ok=True)
-                with open(destination, "wb") as f:
-                    f.write(contents)
-        on_line(f"Verified o3cpatch commit {O3CPATCH_COMMIT[:12]}")
-        try:
+    root = None
+    try:
+        with tempfile.TemporaryDirectory(prefix="o3c-clickset-") as root:
+            try:
+                archive = zipfile.ZipFile(io.BytesIO(data))
+            except zipfile.BadZipFile as e:
+                raise SystemExit("o3cpatch download is not a valid ZIP archive") from e
+            with archive:
+                for relative, expected_hash in O3CPATCH_FILES.items():
+                    member = O3CPATCH_PREFIX + relative
+                    try:
+                        contents = archive.read(member)
+                    except KeyError as e:
+                        raise SystemExit(f"o3cpatch archive is missing {relative}") from e
+                    actual_hash = hashlib.sha256(contents).hexdigest()
+                    if actual_hash != expected_hash:
+                        raise SystemExit(f"o3cpatch verification failed for {relative}")
+                    destination = os.path.join(root, *relative.split("/"))
+                    os.makedirs(os.path.dirname(destination), exist_ok=True)
+                    with open(destination, "wb") as f:
+                        f.write(contents)
+            on_line(f"Verified o3cpatch commit {O3CPATCH_COMMIT[:12]}")
             yield root
-        finally:
+    finally:
+        if root is not None:
             on_line("Removed temporary o3cpatch files")
 
 
@@ -70,8 +72,8 @@ def flash(image_path, on_line=print, gui=False):
 
         upgrade = os.path.join(root, "tools", "upgrade.exe")
         flags = subprocess.CREATE_NEW_CONSOLE if gui else 0
-        on_line("Launching upgrade.exe in a new console. Follow its prompts; do not unplug!"
-                if gui else "Running upgrade.exe -r (do not unplug)")
+        on_line("Launching upgrade.exe in a new console. Close it after it reports success; do not unplug!"
+                if gui else "Running upgrade.exe -r; close it after it reports success (do not unplug)")
         code = subprocess.run([upgrade, "-r"], cwd=root, creationflags=flags).returncode
         on_line(f"upgrade.exe exited with code {code}")
         return code

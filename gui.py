@@ -115,12 +115,6 @@ def pick_open(entry):
         set_entry(entry, path)
 
 
-def pick_save(entry, default):
-    path = filedialog.asksaveasfilename(title="Save as", initialfile=default, defaultextension=".bin")
-    if path:
-        set_entry(entry, path)
-
-
 def set_entry(entry, text):
     entry.delete(0, "end")
     entry.insert(0, text)
