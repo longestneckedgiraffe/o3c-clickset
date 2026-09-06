@@ -62,8 +62,8 @@ def build(payload):
 
 def transact(dev, payload, timeout_ms=1000):
     dev.write(build(payload))
-    deadline = time.time() + timeout_ms / 1000.0
-    while time.time() < deadline:
+    deadline = time.monotonic() + timeout_ms / 1000.0
+    while time.monotonic() < deadline:
         resp = dev.read(REPORT_LEN, timeout_ms=200)
         if resp:
             return resp
