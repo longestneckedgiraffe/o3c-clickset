@@ -42,9 +42,17 @@ class GuiBehaviorTests(unittest.TestCase):
         self.assertTrue(device.closed)
 
     def test_count_parser_accepts_blank_and_unsigned_values(self):
-        self.assertEqual(gui.parse_count(""), (None, None))
-        self.assertEqual(gui.parse_count("123"), (123, None))
-        self.assertIsNotNone(gui.parse_count("-1")[1])
+        for text, expected in (("", None), ("  ", None), ("0", 0), ("123", 123),
+                               (" 123 ", 123), ("\u0661\u0662\u0663", 123), ("4294967295", 0xFFFFFFFF)):
+            with self.subTest(text=text):
+                self.assertEqual(gui.parse_count(text), (expected, None))
+
+    def test_count_parser_rejects_invalid_and_oversized_values(self):
+        for text in ("-1", "+1", "1.5", "1_000", "\u00b2", "4294967296", "9" * 5000):
+            with self.subTest(text=text[:20]):
+                value, error = gui.parse_count(text)
+                self.assertIsNone(value)
+                self.assertIsNotNone(error)
 
 
 if __name__ == "__main__":
