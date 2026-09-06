@@ -41,8 +41,12 @@ def open_device():
         raise DeviceNotFound("No SayoDevice O3C found (VID 0x8089 PID 0x0009). Plugged in?")
     chosen = next((c for c in cands if c.get("usage_page") == USAGE_PAGE), cands[0])
     dev = hid.device()
-    dev.open_path(chosen["path"])
-    dev.set_nonblocking(0)
+    try:
+        dev.open_path(chosen["path"])
+        dev.set_nonblocking(0)
+    except Exception:
+        dev.close()
+        raise
     return dev
 
 
