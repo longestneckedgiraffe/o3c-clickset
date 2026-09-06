@@ -31,8 +31,6 @@ def main():
     n, ok = download(args.out)
     print(f"Downloaded {n} bytes -> {args.out}")
     print(f"Verification: {ok}")
-    if not ok:
-        print("WARNING: Image failed verification")
 
 
 if __name__ == "__main__":

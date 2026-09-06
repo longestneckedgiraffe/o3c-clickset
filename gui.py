@@ -44,7 +44,8 @@ def process_ui_events():
             ui_events.get_nowait()()
     except queue.Empty:
         pass
-    root.after(25, process_ui_events)
+    finally:
+        root.after(25, process_ui_events)
 
 
 def set_busy(value):
@@ -101,9 +102,12 @@ def parse_count(s):
     s = s.strip()
     if not s:
         return None, None
-    if not s.isdigit():
+    if not s.isdecimal():
         return None, "must be a whole number"
-    v = int(s)
+    try:
+        v = int(s)
+    except ValueError:
+        return None, "must be 0 .. 4294967295"
     if v > 0xFFFFFFFF:
         return None, "must be 0 .. 4294967295"
     return v, None

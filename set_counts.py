@@ -41,8 +41,12 @@ def open_device():
         raise DeviceNotFound("No SayoDevice O3C found (VID 0x8089 PID 0x0009). Plugged in?")
     chosen = next((c for c in cands if c.get("usage_page") == USAGE_PAGE), cands[0])
     dev = hid.device()
-    dev.open_path(chosen["path"])
-    dev.set_nonblocking(0)
+    try:
+        dev.open_path(chosen["path"])
+        dev.set_nonblocking(0)
+    except Exception:
+        dev.close()
+        raise
     return dev
 
 
@@ -58,8 +62,8 @@ def build(payload):
 
 def transact(dev, payload, timeout_ms=1000):
     dev.write(build(payload))
-    deadline = time.time() + timeout_ms / 1000.0
-    while time.time() < deadline:
+    deadline = time.monotonic() + timeout_ms / 1000.0
+    while time.monotonic() < deadline:
         resp = dev.read(REPORT_LEN, timeout_ms=200)
         if resp:
             return resp
