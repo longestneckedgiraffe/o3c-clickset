@@ -44,7 +44,8 @@ def process_ui_events():
             ui_events.get_nowait()()
     except queue.Empty:
         pass
-    root.after(25, process_ui_events)
+    finally:
+        root.after(25, process_ui_events)
 
 
 def set_busy(value):

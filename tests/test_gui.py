@@ -1,3 +1,4 @@
+import queue
 import unittest
 from unittest import mock
 
@@ -13,6 +14,24 @@ class FakeDevice:
 
 
 class GuiBehaviorTests(unittest.TestCase):
+    def test_callback_failure_does_not_stop_event_polling(self):
+        events = queue.Queue()
+        failed = mock.Mock(side_effect=RuntimeError("callback failed"))
+        following = mock.Mock()
+        events.put(failed)
+        events.put(following)
+
+        with mock.patch.object(gui, "ui_events", events), mock.patch.object(gui, "root") as root:
+            with self.assertRaisesRegex(RuntimeError, "callback failed"):
+                gui.process_ui_events()
+
+            root.after.assert_called_once_with(25, gui.process_ui_events)
+            following.assert_not_called()
+            root.after.call_args.args[1]()
+
+        following.assert_called_once_with()
+        self.assertTrue(events.empty())
+
     def test_zero_counts_remain_classified_as_stock(self):
         device = FakeDevice()
 
