@@ -3,7 +3,7 @@
 Patches SayoDevice O3C firmware 1.4.12 to add a click-counter command, then reads and sets the device's all-time key press counts over USB HID.
 
 > [!CAUTION]
-> This flashes custom firmware and writes directly to your device over USB HID. It only works on SayoDevice O3C firmware 1.4.12. The current counts are backed up before every write, but you should still use this project at your own risk.
+> This flashes custom firmware and writes directly to your device over USB HID!
 
 ## Install
 
@@ -30,14 +30,6 @@ or (equivalent)
 run.bat
 ```
 
-Then, in the window:
-
-1. Click **Download** to fetch the stock firmware from SayoDevice's CDN.
-2. In **Patch**, pick `app_O3C.bin` and press **Build** to produce the patched `app_O3C_clickset.bin`.
-3. Click **Flash**. A pinned o3cpatch utility is downloaded, verified, used, and removed automatically. It puts the device in bootloader mode; do not unplug it during flashing. Close the utility after it reports a successful flash.
-4. Once the patched firmware is on the device, in **Counts** click **Read** to show the current values, type the new counts, and click **Write** to write the values.
-5. Optionally, flash back the stock 1.4.12 on [sayodevice.com](https://sayodevice.com).
-
 ### CLI
 
 ```sh
@@ -47,13 +39,6 @@ python flash_firmware.py app_O3C_clickset.bin
 python set_counts.py read
 python set_counts.py set --left n --middle n --right n
 ```
-
-## Architecture
-
-- The downloader accepts only the known SHA-256 hash for O3C firmware 1.4.12.
-- The patcher verifies the original bytes at every fixed patch location before modifying the firmware.
-- The flasher downloads a pinned o3cpatch commit into a temporary directory and verifies the executable, configuration, and license before use.
-- [IDA Pro](https://hex-rays.com/ida-pro) 9.3 was used to analyze the stock firmware. Supporting another firmware version will require a new analysis and another round of device testing.
 
 ## Development
 
@@ -93,11 +78,7 @@ The most common issues are:
 - Your Sayodevice O3C is not plugged in.
 - This project is out of date.
 
-## Attribution
-
-- [o3cpatch](https://github.com/Vali0004/o3cpatch)
-  - o3cpatch is automatically downloaded and used in this project to flash the firmware.
-
 ## License
 
 [MIT](LICENSE.md)
+
