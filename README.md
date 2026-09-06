@@ -81,4 +81,3 @@ The most common issues are:
 ## License
 
 [MIT](LICENSE.md)
-
